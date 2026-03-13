@@ -16,6 +16,7 @@ from omegaconf import DictConfig
 from torch import nn
 from torch.utils.data import ConcatDataset, DataLoader
 from torchmetrics import MetricCollection
+import torch.nn.functional as F # for our last augmentation method, Timestretch
 
 from emg2qwerty import utils
 from emg2qwerty.charset import charset
@@ -271,7 +272,9 @@ class TDSConvCTCModule(pl.LightningModule):
         )
 
 
-
+#======================#
+# CNN-GRU Model
+#======================#
 
 
 class CNNGRUCTCModule(pl.LightningModule):
@@ -290,6 +293,7 @@ class CNNGRUCTCModule(pl.LightningModule):
         gru_hidden_size: int = 256,
         gru_num_layers: int = 1,
         gru_bidirectional: bool = True,
+        electrode_channels: int = 16,
     ) -> None:
         super().__init__()
         self.save_hyperparameters()
@@ -298,7 +302,7 @@ class CNNGRUCTCModule(pl.LightningModule):
         gru_output_size = gru_hidden_size * (2 if gru_bidirectional else 1)
 
         self.feature_extractor = nn.Sequential(
-            SpectrogramNorm(channels=self.NUM_BANDS * self.ELECTRODE_CHANNELS),
+            SpectrogramNorm(channels=self.NUM_BANDS * electrode_channels),
             MultiBandRotationInvariantMLP(
                 in_features=in_features,
                 mlp_features=mlp_features,
@@ -410,7 +414,9 @@ class CNNGRUCTCModule(pl.LightningModule):
 
 
 
-
+#======================#
+# Tranformer Model
+#======================#
 
 class TransformerCTCModule(pl.LightningModule):
     NUM_BANDS: ClassVar[int] = 2

@@ -243,3 +243,77 @@ class SpecAugment:
 
         # (..., C, freq, T) -> (T, ..., C, freq)
         return x.movedim(-1, 0)
+
+
+#======================================================================================#
+# Custom EMG-specific augmentations including gaussian noise and amplitude scaling
+#======================================================================================#
+
+@dataclass
+class AddGaussianNoise:
+    """Add small Gaussian noise to raw EMG.
+
+    Args:
+        std (float): Standard deviation of the Gaussian noise.
+    """
+
+    std: float = 0.01
+
+    def __call__(self, tensor: torch.Tensor) -> torch.Tensor:
+        noise = torch.randn_like(tensor) * self.std
+        return tensor + noise
+
+
+@dataclass
+class RandomAmplitudeScale:
+    """Randomly scale the EMG amplitude.
+
+    Args:
+        min_scale (float): Minimum multiplicative scale.
+        max_scale (float): Maximum multiplicative scale.
+        per_channel (bool): If True, sample a different scale per channel.
+            If False, use one global scale for the whole tensor.
+    """
+
+    min_scale: float = 0.9
+    max_scale: float = 1.1
+    per_channel: bool = False
+
+    def __call__(self, tensor: torch.Tensor) -> torch.Tensor:
+        if self.per_channel:
+            # tensor shape is typically (T, bands, channels)
+            scale_shape = [1] * tensor.ndim
+            scale_shape[-1] = tensor.shape[-1]
+            scale = torch.empty(scale_shape, device=tensor.device, dtype=tensor.dtype)
+            scale.uniform_(self.min_scale, self.max_scale)
+        else:
+            scale = float(np.random.uniform(self.min_scale, self.max_scale))
+
+        return tensor * scale
+
+
+#====================#
+# Channel Ablation
+#====================#
+
+@dataclass
+class SelectChannels:
+    """
+    Selects a subset of electrode channels.
+
+    Assumes input tensor shape follows the repo convention:
+        (T, N, C)
+    where
+        T = time
+        N = band/batch (emg_left, emg_right)
+        C = electrode channels
+
+    Args:
+        channels (Sequence[int]): Indices of channels to keep.
+    """
+
+    channels: Sequence[int]
+
+    def __call__(self, tensor: torch.Tensor) -> torch.Tensor:
+        # Select only the desired channels
+        return tensor[..., self.channels]
